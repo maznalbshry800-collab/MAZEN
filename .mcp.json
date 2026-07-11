@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "whapi-mcp": {
+      "command": "npx",
+      "args": ["-y", "whapi-mcp@latest"],
+      "env": {
+        "API_TOKEN": "${WHAPI_API_TOKEN:-}"
+      }
+    }
+  }
+}
