@@ -1,0 +1,13 @@
+{
+  "name": "revenue-tracking",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Webhook receiver that logs WhatsApp revenue reports from a specific sender/group as revenue records",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
