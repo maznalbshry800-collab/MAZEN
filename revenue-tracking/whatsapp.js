@@ -21,15 +21,29 @@ function getStatus() {
   return status;
 }
 
+function unwrapMessage(message) {
+  // Disappearing-messages / view-once / edit wrappers nest the real content
+  // one level deeper; unwrap until we hit an actual content type.
+  let m = message;
+  while (m && (m.ephemeralMessage || m.viewOnceMessage || m.viewOnceMessageV2 || m.documentWithCaptionMessage)) {
+    m = (m.ephemeralMessage || m.viewOnceMessage || m.viewOnceMessageV2 || m.documentWithCaptionMessage).message;
+  }
+  return m;
+}
+
 function convertMessage(msg) {
   if (!msg.message) return null;
 
   const chatId = msg.key.remoteJid;
   const isGroup = chatId && chatId.endsWith("@g.us");
-  const from = isGroup ? msg.key.participant : chatId;
+  const from = isGroup ? msg.key.participant || msg.participant : chatId;
+  const content = unwrapMessage(msg.message);
   const text =
-    msg.message.conversation ||
-    (msg.message.extendedTextMessage && msg.message.extendedTextMessage.text) ||
+    (content &&
+      (content.conversation ||
+        (content.extendedTextMessage && content.extendedTextMessage.text) ||
+        (content.imageMessage && content.imageMessage.caption) ||
+        (content.videoMessage && content.videoMessage.caption))) ||
     null;
 
   return {

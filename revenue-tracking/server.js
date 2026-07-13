@@ -52,27 +52,27 @@ function saveRevenue(record) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(all, null, 2));
 }
 
+const HISTORY_PER_CHAT = 50;
+let seenChatsCache = null;
+
 function recordSeenChat(message) {
-  const chats = loadJsonArray(SEEN_CHATS_FILE);
-  const existing = chats.find((c) => c.chat_id === message.chat_id);
+  if (!seenChatsCache) seenChatsCache = loadJsonArray(SEEN_CHATS_FILE);
   const rawText = (message.text && message.text.body) || `[${message.type}]`;
-  if (existing) {
-    existing.last_from = message.from;
-    existing.last_from_name = message.from_name || null;
-    existing.last_text = rawText;
-    existing.last_seen = new Date().toISOString();
-    existing.count = (existing.count || 0) + 1;
-  } else {
-    chats.push({
-      chat_id: message.chat_id,
-      last_from: message.from,
-      last_from_name: message.from_name || null,
-      last_text: rawText,
-      last_seen: new Date().toISOString(),
-      count: 1,
-    });
+  let existing = seenChatsCache.find((c) => c.chat_id === message.chat_id);
+  if (!existing) {
+    existing = { chat_id: message.chat_id, messages: [] };
+    seenChatsCache.push(existing);
   }
-  fs.writeFileSync(SEEN_CHATS_FILE, JSON.stringify(chats, null, 2));
+  existing.messages.push({
+    from: message.from,
+    from_name: message.from_name || null,
+    text: rawText,
+    timestamp: message.timestamp,
+  });
+  if (existing.messages.length > HISTORY_PER_CHAT) {
+    existing.messages = existing.messages.slice(-HISTORY_PER_CHAT);
+  }
+  fs.writeFileSync(SEEN_CHATS_FILE, JSON.stringify(seenChatsCache, null, 2));
 }
 
 // Expected message shape: "اسم العميل / اسم المنتج  السعر$"
@@ -220,6 +220,26 @@ app.get("/seen-chats", (req, res) => {
     return res.sendStatus(401);
   }
   res.json(loadJsonArray(SEEN_CHATS_FILE));
+});
+
+app.get("/search-messages", (req, res) => {
+  if (WEBHOOK_SECRET && req.query.token !== WEBHOOK_SECRET) {
+    return res.sendStatus(401);
+  }
+  const q = (req.query.q || "").toString();
+  if (!q) return res.status(400).json({ error: "provide ?q=text to search for" });
+
+  const chats = loadJsonArray(SEEN_CHATS_FILE);
+  const results = [];
+  for (const chat of chats) {
+    const country = GROUP_COUNTRY[chat.chat_id.toLowerCase()] || null;
+    for (const m of chat.messages || []) {
+      if (m.text && m.text.includes(q)) {
+        results.push({ chat_id: chat.chat_id, country, ...m });
+      }
+    }
+  }
+  res.json(results);
 });
 
 const whatsapp = require("./whatsapp");
