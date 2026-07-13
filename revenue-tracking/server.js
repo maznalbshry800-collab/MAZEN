@@ -230,10 +230,11 @@ app.get("/qr", (req, res) => {
   }
   const qr = whatsapp.getQrDataUrl();
   const status = whatsapp.getStatus();
+  const refresh = `<meta http-equiv="refresh" content="10">`;
   if (!qr) {
-    return res.send(`<h2>WhatsApp status: ${status}</h2><p>No QR code needed right now (either already connected, or not generated yet — refresh in a few seconds).</p>`);
+    return res.send(`${refresh}<h2>WhatsApp status: ${status}</h2><p>No QR code needed right now (either already connected, or not generated yet — this page auto-refreshes every 10s).</p>`);
   }
-  res.send(`<h2>Scan this with WhatsApp (Linked Devices)</h2><img src="${qr}" /><p>Status: ${status}</p>`);
+  res.send(`${refresh}<h2>Scan this with WhatsApp (Linked Devices) — scan quickly, it expires in ~20s and this page auto-refreshes</h2><img src="${qr}" /><p>Status: ${status}</p>`);
 });
 
 whatsapp.start(processMessage).catch((err) => console.error("WhatsApp connection error:", err));
