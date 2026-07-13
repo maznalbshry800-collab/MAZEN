@@ -107,6 +107,17 @@ app.get("/revenues", (req, res) => {
   res.json(loadRevenues());
 });
 
+app.get("/debug-config", (req, res) => {
+  if (WEBHOOK_SECRET && req.query.token !== WEBHOOK_SECRET) {
+    return res.sendStatus(401);
+  }
+  res.json({
+    ALLOWED_GROUP_IDS: ALLOWED_GROUP_IDS.map((s) => JSON.stringify(s)),
+    ALLOWED_SENDERS: ALLOWED_SENDERS.map((s) => JSON.stringify(s)),
+    WEBHOOK_SECRET_set: Boolean(WEBHOOK_SECRET),
+  });
+});
+
 app.get("/seen-chats", (req, res) => {
   if (WEBHOOK_SECRET && req.query.token !== WEBHOOK_SECRET) {
     return res.sendStatus(401);
