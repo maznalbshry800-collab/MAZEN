@@ -64,6 +64,17 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(200);
 });
 
+app.get("/debug-config", (req, res) => {
+  if (WEBHOOK_SECRET && req.query.token !== WEBHOOK_SECRET) {
+    return res.sendStatus(401);
+  }
+  res.json({
+    ALLOWED_GROUP_ID: JSON.stringify(ALLOWED_GROUP_ID),
+    ALLOWED_SENDERS: ALLOWED_SENDERS.map((s) => JSON.stringify(s)),
+    WEBHOOK_SECRET_set: Boolean(WEBHOOK_SECRET),
+  });
+});
+
 app.get("/revenues", (req, res) => {
   if (WEBHOOK_SECRET && req.query.token !== WEBHOOK_SECRET) {
     return res.sendStatus(401);
