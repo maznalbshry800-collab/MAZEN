@@ -159,7 +159,9 @@ function processMessage(message) {
 
   if (message.type !== "text") return;
   if (ALLOWED_GROUP_IDS.length && !ALLOWED_GROUP_IDS.includes((message.chat_id || "").toLowerCase())) return;
-  if (ALLOWED_SENDERS.length && !ALLOWED_SENDERS.includes(message.from)) return;
+  // Sales confirmations come from reps and customers alike, not just a
+  // fixed rep number, so the real filter is an exact product-name match
+  // in parseRepMessage below rather than sender identity.
 
   const rawText = message.text && message.text.body;
   if (!rawText) return;
