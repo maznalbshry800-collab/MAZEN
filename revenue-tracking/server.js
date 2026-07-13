@@ -5,6 +5,8 @@ const express = require("express");
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "revenues.json");
 const SEEN_CHATS_FILE = process.env.SEEN_CHATS_FILE || path.join(__dirname, "seen-chats.json");
+const PRICES_FILE = process.env.PRICES_FILE || path.join(__dirname, "courses-prices.json");
+const COURSE_PRICES = JSON.parse(fs.readFileSync(PRICES_FILE, "utf8"));
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
 const ALLOWED_GROUP_IDS = `${process.env.ALLOWED_GROUP_IDS || ""},${process.env.ALLOWED_GROUP_ID || ""}`
   .split(",")
@@ -53,10 +55,27 @@ function recordSeenChat(message) {
   fs.writeFileSync(SEEN_CHATS_FILE, JSON.stringify(chats, null, 2));
 }
 
-function extractAmount(text) {
-  const match = text.match(/\d[\d,]*(?:\.\d+)?/);
-  if (!match) return null;
-  return parseFloat(match[0].replace(/,/g, ""));
+// Expected message shape: "اسم العميل / اسم المنتج  السعر$"
+// The price actually recorded always comes from COURSE_PRICES (the reference
+// file), never from the number typed in the message.
+function parseRepMessage(text) {
+  let customer = null;
+  let productAndPrice = text.trim();
+
+  const slashIndex = text.indexOf("/");
+  if (slashIndex !== -1) {
+    customer = text.slice(0, slashIndex).trim();
+    productAndPrice = text.slice(slashIndex + 1).trim();
+  }
+
+  const trailingPrice = productAndPrice.match(/^(.*?)\s*[\d.,]+\s*\$?\s*$/);
+  const product = (trailingPrice ? trailingPrice[1] : productAndPrice).trim();
+
+  const amount = Object.prototype.hasOwnProperty.call(COURSE_PRICES, product)
+    ? COURSE_PRICES[product]
+    : null;
+
+  return { customer, product, amount, matched: amount !== null };
 }
 
 const app = express();
@@ -84,13 +103,16 @@ app.post("/webhook", (req, res) => {
     const rawText = message.text && message.text.body;
     if (!rawText) continue;
 
-    const amount = extractAmount(rawText);
+    const { customer, product, amount, matched } = parseRepMessage(rawText);
     saveRevenue({
       message_id: message.id,
       group_id: message.chat_id,
       from: message.from,
       from_name: message.from_name || null,
+      customer,
+      product,
       amount,
+      matched,
       raw_text: rawText,
       message_timestamp: message.timestamp,
       received_at: new Date().toISOString(),
