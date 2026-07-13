@@ -8,6 +8,9 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "@whiskeysockets/baileys": "6.17.16",
+    "express": "^4.19.2",
+    "pino": "^9.3.2",
+    "qrcode": "^1.5.4"
   }
 }

@@ -132,6 +132,46 @@ function incrementTally(country, month, product) {
   saveTally(country, month, rows);
 }
 
+function processMessage(message) {
+  if (message.from_me) return;
+
+  if (message.chat_id && message.chat_id.endsWith("@g.us")) {
+    recordSeenChat(message);
+  }
+
+  if (message.type !== "text") return;
+  if (ALLOWED_GROUP_IDS.length && !ALLOWED_GROUP_IDS.includes((message.chat_id || "").toLowerCase())) return;
+  if (ALLOWED_SENDERS.length && !ALLOWED_SENDERS.includes(message.from)) return;
+
+  const rawText = message.text && message.text.body;
+  if (!rawText) return;
+
+  const { customer, product, price, matched } = parseRepMessage(rawText);
+  const country = GROUP_COUNTRY[(message.chat_id || "").toLowerCase()] || null;
+  const month = arabicMonth(message.timestamp);
+
+  if (matched && country) {
+    incrementTally(country, month, product);
+  }
+
+  saveRevenue({
+    message_id: message.id,
+    group_id: message.chat_id,
+    country,
+    month,
+    from: message.from,
+    from_name: message.from_name || null,
+    customer,
+    product,
+    price_sar: matched ? price.sar : null,
+    price_usd: matched ? price.usd : null,
+    matched,
+    raw_text: rawText,
+    message_timestamp: message.timestamp,
+    received_at: new Date().toISOString(),
+  });
+}
+
 const app = express();
 app.use(express.json());
 
@@ -144,43 +184,7 @@ app.post("/webhook", (req, res) => {
 
   const messages = req.body.messages || [];
   for (const message of messages) {
-    if (message.from_me) continue;
-
-    if (message.chat_id && message.chat_id.endsWith("@g.us")) {
-      recordSeenChat(message);
-    }
-
-    if (message.type !== "text") continue;
-    if (ALLOWED_GROUP_IDS.length && !ALLOWED_GROUP_IDS.includes((message.chat_id || "").toLowerCase())) continue;
-    if (ALLOWED_SENDERS.length && !ALLOWED_SENDERS.includes(message.from)) continue;
-
-    const rawText = message.text && message.text.body;
-    if (!rawText) continue;
-
-    const { customer, product, price, matched } = parseRepMessage(rawText);
-    const country = GROUP_COUNTRY[(message.chat_id || "").toLowerCase()] || null;
-    const month = arabicMonth(message.timestamp);
-
-    if (matched && country) {
-      incrementTally(country, month, product);
-    }
-
-    saveRevenue({
-      message_id: message.id,
-      group_id: message.chat_id,
-      country,
-      month,
-      from: message.from,
-      from_name: message.from_name || null,
-      customer,
-      product,
-      price_sar: matched ? price.sar : null,
-      price_usd: matched ? price.usd : null,
-      matched,
-      raw_text: rawText,
-      message_timestamp: message.timestamp,
-      received_at: new Date().toISOString(),
-    });
+    processMessage(message);
   }
 
   res.sendStatus(200);
@@ -217,5 +221,21 @@ app.get("/seen-chats", (req, res) => {
   }
   res.json(loadJsonArray(SEEN_CHATS_FILE));
 });
+
+const whatsapp = require("./whatsapp");
+
+app.get("/qr", (req, res) => {
+  if (WEBHOOK_SECRET && req.query.token !== WEBHOOK_SECRET) {
+    return res.sendStatus(401);
+  }
+  const qr = whatsapp.getQrDataUrl();
+  const status = whatsapp.getStatus();
+  if (!qr) {
+    return res.send(`<h2>WhatsApp status: ${status}</h2><p>No QR code needed right now (either already connected, or not generated yet — refresh in a few seconds).</p>`);
+  }
+  res.send(`<h2>Scan this with WhatsApp (Linked Devices)</h2><img src="${qr}" /><p>Status: ${status}</p>`);
+});
+
+whatsapp.start(processMessage).catch((err) => console.error("WhatsApp connection error:", err));
 
 app.listen(PORT, () => console.log(`revenue-tracking listening on ${PORT}`));
