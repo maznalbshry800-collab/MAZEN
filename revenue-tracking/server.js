@@ -75,11 +75,14 @@ function recordSeenChat(message) {
   fs.writeFileSync(SEEN_CHATS_FILE, JSON.stringify(seenChatsCache, null, 2));
 }
 
-// Two message shapes are used by reps:
-//   A) "اسم العميل / اسم المنتج  السعر$"  (single line, slash-separated)
-//   B) "اسم المنتج\nحساب الخصم\nإيميل/اسم العميل"  (multi-line, no slash)
-// Either way, the price actually recorded always comes from COURSE_PRICES
-// (the reference file), never from the number typed in the message.
+// Reps use inconsistent shapes, e.g.:
+//   A) "اسم العميل / اسم المنتج  السعر$"           (single line, slash-separated)
+//   B) "اسم العميل\nاسم المنتج\nالسعر$\nجوال\nإيميل" (multi-line, name then product)
+//   C) "اسم المنتج\nحساب الخصم\nإيميل"              (multi-line, product first)
+// Rather than assume a fixed line order, scan for whichever line matches a
+// known product name exactly and treat the line before it as the customer
+// (or the last line, when the product is first). The price actually
+// recorded always comes from COURSE_PRICES, never from the message text.
 function parseRepMessage(text) {
   const trimmed = text.trim();
   let customer = null;
@@ -93,8 +96,17 @@ function parseRepMessage(text) {
     product = (trailingPrice ? trailingPrice[1] : productAndPrice).trim();
   } else {
     const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
-    product = lines[0] || null;
-    customer = lines.length > 1 ? lines[lines.length - 1] : null;
+    const productLineIndex = lines.findIndex((l) =>
+      Object.prototype.hasOwnProperty.call(COURSE_PRICES, l)
+    );
+
+    if (productLineIndex !== -1) {
+      product = lines[productLineIndex];
+      customer = productLineIndex > 0 ? lines[0] : lines[lines.length - 1] || null;
+    } else {
+      product = lines[0] || null;
+      customer = lines.length > 1 ? lines[lines.length - 1] : null;
+    }
   }
 
   const price = product && Object.prototype.hasOwnProperty.call(COURSE_PRICES, product)
