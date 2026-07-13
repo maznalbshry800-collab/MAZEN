@@ -75,23 +75,29 @@ function recordSeenChat(message) {
   fs.writeFileSync(SEEN_CHATS_FILE, JSON.stringify(seenChatsCache, null, 2));
 }
 
-// Expected message shape: "اسم العميل / اسم المنتج  السعر$"
-// The price actually recorded always comes from COURSE_PRICES (the reference
-// file), never from the number typed in the message.
+// Two message shapes are used by reps:
+//   A) "اسم العميل / اسم المنتج  السعر$"  (single line, slash-separated)
+//   B) "اسم المنتج\nحساب الخصم\nإيميل/اسم العميل"  (multi-line, no slash)
+// Either way, the price actually recorded always comes from COURSE_PRICES
+// (the reference file), never from the number typed in the message.
 function parseRepMessage(text) {
+  const trimmed = text.trim();
   let customer = null;
-  let productAndPrice = text.trim();
+  let product = null;
 
-  const slashIndex = text.indexOf("/");
-  if (slashIndex !== -1) {
-    customer = text.slice(0, slashIndex).trim();
-    productAndPrice = text.slice(slashIndex + 1).trim();
+  if (trimmed.includes("/")) {
+    const slashIndex = trimmed.indexOf("/");
+    customer = trimmed.slice(0, slashIndex).trim();
+    const productAndPrice = trimmed.slice(slashIndex + 1).trim();
+    const trailingPrice = productAndPrice.match(/^(.*?)\s*[\d.,]+\s*\$?\s*$/);
+    product = (trailingPrice ? trailingPrice[1] : productAndPrice).trim();
+  } else {
+    const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+    product = lines[0] || null;
+    customer = lines.length > 1 ? lines[lines.length - 1] : null;
   }
 
-  const trailingPrice = productAndPrice.match(/^(.*?)\s*[\d.,]+\s*\$?\s*$/);
-  const product = (trailingPrice ? trailingPrice[1] : productAndPrice).trim();
-
-  const price = Object.prototype.hasOwnProperty.call(COURSE_PRICES, product)
+  const price = product && Object.prototype.hasOwnProperty.call(COURSE_PRICES, product)
     ? COURSE_PRICES[product]
     : null;
 
